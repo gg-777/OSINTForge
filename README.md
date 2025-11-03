@@ -18,6 +18,22 @@ OSINTForge automates open-source intelligence ingestion, normalization, and risk
 - **Scores** threats via asset criticality, exploitability, and threat activity
 - **Visualizes** results in dashboards or APIs for SOC and analysts
 
+
+          +--------------------+
+          |  OSINT Feeds (APIs)|  ←  OTX, MISP, Intel471, CVE, etc.
+          +--------------------+
+                     ↓
+              [ ingestion ]
+                     ↓
+          +----------------+
+          |  minio / pgsql |
+          +----------------+
+                     ↓
+              [ Agent Zero ]   ←  ⚡ brains: scoring, ML, correlation
+                     ↓
+            [ opensearch / webui ]
+
+
 ---
 
 ### ⚙️ Stack
