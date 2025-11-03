@@ -1,58 +1,59 @@
-# OSINTForge
-where intelligence is “forged” and scored
-<h1 align="center">🧠 OSINTForge ⚒️</h1>
+# Sec PoC Pipeline (Docs Ingest + Search + Vectors + ML Starter)
 
-<p align="center">
-  <em>Forging raw OSINT into actionable threat intelligence</em><br/>
-  <img src="assets/osintforge_banner.svg" width="600"/>
-</p>
+This repo bundles a local lab stack for ingesting security documents/PoCs into object storage, extracting text/metadata, indexing into OpenSearch, storing vectors in Milvus for semantic search, and a small web UI to query both. It also includes an Airflow TaskFlow DAG and a starter ML notebook for anomaly detection.
 
----
+> **Safety**: Do not execute PoC code on production systems. Inspect all PoC artifacts before use. Run tests only in isolated lab environments you own or have explicit permission to test.
 
-### 🔍 Overview
-OSINTForge automates open-source intelligence ingestion, normalization, and risk scoring through a unified AI pipeline.
+## Stack
+- OpenSearch (full-text search)
+- Milvus (vector search)
+- MinIO (S3-compatible object storage)
+- Postgres (document catalog)
+- Apache Tika (text extraction from docs)
+- Ingestion Worker (Python + Sentence-Transformers)
+- Web UI (FastAPI + Uvicorn) for keyword + vector search
+- Airflow DAG (TaskFlow) for scheduled ingest
+- Notebook: `notebooks/log_ml_starter.ipynb`
 
-- **Ingests** dozens of intel feeds (MISP, OTX, NVD, CISA, Intel471, ExploitDB)
-- **Normalizes** all data into STIX-2 format
-- **Correlates** indicators with your core assets
-- **Scores** threats via asset criticality, exploitability, and threat activity
-- **Visualizes** results in dashboards or APIs for SOC and analysts
+## Quickstart
 
+1) **Start the stack**
 
-          +--------------------+
-          |  OSINT Feeds (APIs)|  ←  OTX, MISP, Intel471, CVE, etc.
-          +--------------------+
-                     ↓
-              [ ingestion ]
-                     ↓
-          +----------------+
-          |  minio / pgsql |
-          +----------------+
-                     ↓
-              [ Agent Zero ]   ←  ⚡ brains: scoring, ML, correlation
-                     ↓
-            [ opensearch / webui ]
+```bash
+docker compose up --build
+```
 
+2) **Create bucket & upload a test doc**
 
----
+- Open MinIO: http://localhost:9000 (minioadmin/minioadmin)
+- Create bucket: `sec-repo`
+- Upload a PDF or text under prefix `pocs/` (e.g. `pocs/fortinet/CVE-2024-XXXX-writeup.pdf`)
 
-### ⚙️ Stack
-| Layer | Technology |
-|-------|-------------|
-| Storage | PostgreSQL · OpenSearch · Milvus · MinIO |
-| Processing | Python · FastAPI · Airflow DAGs |
-| Models | Sentence-Transformers · LSTM Autoencoders |
-| Orchestration | Docker Compose · RangeOS Integration |
+The ingestion worker will: download -> Tika extract -> embed -> index to OpenSearch -> insert vector to Milvus.
 
----
+3) **Search**
 
-### 🧩 Roadmap
-- [ ] Threat actor relationship graph (Neo4j)
-- [ ] Risk scoring API endpoints
-- [ ] ML-driven prioritization model
-- [ ] PoC correlation dashboard
+- Web UI: http://localhost:8088 (enter a query, see keyword + vector results JSON)
+- OpenSearch API: http://localhost:9200 (index: `docs`)
 
----
+4) **Notebook (optional)**
 
-### 🛡️ License
-Apache 2.0 — built for research, SOC augmentation, and continuous red-blue collaboration.
+Open `notebooks/log_ml_starter.ipynb` in Jupyter/VSCode and run. Replace synthetic data with real features pulled from OpenSearch.
+
+## Useful Environment Variables
+- `OPENSEARCH_URL` (default `http://opensearch-node:9200`)
+- `MILVUS_HOST` / `MILVUS_PORT` (default `milvus:19530`)
+- `MINIO_ENDPOINT` (`minio:9000`), `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
+- `POSTGRES_CONN` (default `postgresql://secuser:secpass@postgres:5432/seccatalog`)
+- `TIKA_URL` (`http://tika:9998`)
+- `EMBEDDING_MODEL` (`sentence-transformers/all-mpnet-base-v2`)
+- `INGEST_BUCKET` (`sec-repo`)
+
+## Airflow (optional)
+The DAG `dags/doc_ingest_taskflow_dag.py` demonstrates TaskFlow + dynamic mapping to process S3/MinIO keys. To run, use your existing Airflow environment and mount this `dags/` directory.
+
+## Next Steps
+- Join Milvus IDs to OpenSearch docs by storing doc IDs in Milvus as an additional field (add a scalar field).
+- Add Postgres joins in `webui` to show titles when doing vector-only search.
+- Add authentication/TLS, secrets management, backups, and monitoring for production.
+- Extend the ML pipeline with real logs (OpenSearch queries → features → model training).

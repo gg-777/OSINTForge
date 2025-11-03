@@ -1,0 +1,99 @@
+version: '3.8'
+services:
+  opensearch-node:
+    image: opensearchproject/opensearch:2.9.0
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - plugins.security.disabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+
+  milvus:
+    image: milvusdb/milvus:v2.4.4   # ← NEW, stable version
+    container_name: milvus
+    environment:
+      - TZ=UTC
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    command: ["milvus", "run", "standalone"]
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"
+    volumes:
+      - minio-data:/data
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=secuser
+      - POSTGRES_PASSWORD=secpass
+      - POSTGRES_DB=seccatalog
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  tika:
+    image: apache/tika:latest
+    ports:
+      - "9998:9998"
+
+  ingestion-worker:
+    build: ./ingestion
+    depends_on:
+      - opensearch-node
+      - milvus
+      - minio
+      - postgres
+      - tika
+    environment:
+      - OPENSEARCH_URL=http://opensearch-node:9200
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - POSTGRES_CONN=postgresql://secuser:secpass@postgres:5432/seccatalog
+      - TIKA_URL=http://tika:9998
+      - EMBEDDING_MODEL=sentence-transformers/all-mpnet-base-v2
+      - INGEST_BUCKET=sec-repo
+    volumes:
+      - ./ingestion:/app
+
+  webui:
+    build: ./webui
+    depends_on:
+      - opensearch-node
+      - milvus
+    environment:
+      - OPENSEARCH_URL=http://opensearch-node:9200
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - EMBEDDING_MODEL=sentence-transformers/all-mpnet-base-v2
+    ports:
+      - "8088:8088"
+
+volumes:
+  opensearch-data:
+  minio-data:
+  pgdata:
